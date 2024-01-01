@@ -1732,19 +1732,38 @@ int js_gcdump_add_atom(JSGCDumpContext *dc, JSAtom atom) {
   return i;
 }
 
+/* return true if obj is a Proxy object */
+static inline BOOL JS_IsProxy(JSValueConst obj)
+{
+  return JS_VALUE_GET_TAG(obj) == JS_TAG_OBJECT &&
+         JS_VALUE_GET_OBJ(obj)->class_id == JS_CLASS_PROXY;
+}
+
+
 int js_gcdump_get_node_name(JSGCDumpContext *dc, JSObject *objp) {
   JSPropertyDescriptor desc;
   int res, name = -1;
+  JSValueConst val = JS_MKPTR(JS_TAG_OBJECT, objp);
+  if (JS_IsProxy(val)) {
+    name = js_gcdump_add_atom(dc, JS_ATOM_Proxy);
+    return name;
+  }
   res = JS_GetOwnPropertyInternal(dc->jc, &desc, objp, JS_ATOM_name);
   if (res > 0 && JS_IsString(desc.value)) {
     JSAtom atom = JS_NewAtomStr(dc->jc, JS_VALUE_GET_PTR(desc.value));
-    if (atom != JS_ATOM_NULL) {
+    char* n1 = JS_AtomToCString(dc->jc, atom);
+    bool t = atom != JS_ATOM_NULL;
+    if (t) {
       name = js_gcdump_add_atom(dc, atom);
       JS_FreeAtom(dc->jc, atom);
     }
+    JS_FreeCString(dc->jc, n1);
+
   } else {
-    name = js_gcdump_add_atom(
-        dc, dc->jc->rt->class_array[objp->class_id].class_name);
+    JSAtom atom  = dc->jc->rt->class_array[objp->class_id].class_name;
+    char* n1 = JS_AtomToCString(dc->jc, atom);
+    name = js_gcdump_add_atom( dc, atom);
+    JS_FreeCString(dc->jc, n1);
   }
   return name;
 }
@@ -2070,7 +2089,7 @@ void js_gcdump_write2file(JSGCDumpContext *dc) {
   fprintf(fp, "        \"name\",\n");
   fprintf(fp, "        \"id\",\n");
   fprintf(fp, "        \"self_size\",\n");
-  fprintf(fp, "        \"edge_count\"\n"); 
+  fprintf(fp, "        \"edge_count\"\n");
   fprintf(fp, "      ],\n"); // node_fields close
 
   fprintf(fp, "      \"node_types\": [\n"); // node_types
@@ -2090,10 +2109,10 @@ void js_gcdump_write2file(JSGCDumpContext *dc) {
   fprintf(fp, "          \"symbol\",\n");
   fprintf(fp, "          \"bigint\"\n");
   fprintf(fp, "        ],\n"); // node_types enum close
-  fprintf(fp, "        \"string\",\n");  
-  fprintf(fp, "        \"number\",\n");  
-  fprintf(fp, "        \"number\",\n");  
-  fprintf(fp, "        \"number\"\n");  
+  fprintf(fp, "        \"string\",\n");
+  fprintf(fp, "        \"number\",\n");
+  fprintf(fp, "        \"number\",\n");
+  fprintf(fp, "        \"number\"\n");
   fprintf(fp, "      ],\n");                // node_types close
 
   fprintf(fp, "      \"edge_fields\": [\n"); // edge_fields
@@ -2112,8 +2131,8 @@ void js_gcdump_write2file(JSGCDumpContext *dc) {
   fprintf(fp, "          \"shortcut\",\n");
   fprintf(fp, "          \"weak\"\n");
   fprintf(fp, "        ],\n"); // edge_types enum close
-  fprintf(fp, "        \"string_or_number\",\n"); 
-  fprintf(fp, "        \"node\"\n"); 
+  fprintf(fp, "        \"string_or_number\",\n");
+  fprintf(fp, "        \"node\"\n");
   fprintf(fp, "      ]\n");                 // edge_types close
 
   fprintf(fp, "    },\n"); // meta close
