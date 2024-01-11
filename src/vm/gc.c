@@ -1760,10 +1760,20 @@ int js_gcdump_get_node_name(JSGCDumpContext *dc, JSObject *objp) {
     JS_FreeCString(dc->jc, n1);
 
   } else {
-    JSAtom atom  = dc->jc->rt->class_array[objp->class_id].class_name;
-    char* n1 = JS_AtomToCString(dc->jc, atom);
-    name = js_gcdump_add_atom( dc, atom);
-    JS_FreeCString(dc->jc, n1);
+    JSValue ctor = JS_GetProperty(dc->jc, val, JS_ATOM_constructor);
+    if (JS_IsFunction(dc->jc, ctor)) {
+      JSValue cname = JS_GetPropertyStr(dc->jc, ctor, "name");
+      JSAtom atom = JS_ValueToAtom(dc->jc, cname);
+      name = js_gcdump_add_atom(dc, atom);
+
+      JS_FreeAtom(dc->jc, atom);
+      JS_FreeValue(dc->jc, cname);
+    } else {
+      JSAtom atom  = dc->jc->rt->class_array[objp->class_id].class_name;
+      name = js_gcdump_add_atom( dc, atom);
+    }
+
+    JS_FreeValue(dc->jc, ctor);
   }
   return name;
 }
