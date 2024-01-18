@@ -1530,16 +1530,31 @@ static void JS_Context_gcdump(JSRuntime *rt, JSContext *ctx,
 
 void JS_GCDumpValue(JSRuntime *rt, JSValueConst val, JS_GCDumpFunc *walk_func,
                     JS_GCDumpFuncContext dctx) {
-  if (JS_VALUE_HAS_REF_COUNT(val)) {
+
+  int t = JS_VALUE_GET_TAG(val);
     switch (JS_VALUE_GET_TAG(val)) {
-    case JS_TAG_OBJECT:
-    case JS_TAG_FUNCTION_BYTECODE:
-    case JS_TAG_STRING:
+  case JS_TAG_OBJECT:
+  case JS_TAG_FUNCTION_BYTECODE:
+  case JS_TAG_STRING: {
+    if (JS_VALUE_HAS_REF_COUNT(val)) {
       walk_func(rt, JS_VALUE_GET_PTR(val), dctx);
-      break;
-    default:
-      break;
     }
+  } break;
+  case JS_TAG_INT: {
+    double result = 0;
+    int ret = JS_ToFloat64(dctx.dc->jc, &result, val);
+    if (ret != 0) {
+      // Handle error
+    } else {
+      if (result > 10000 && result < 10100) {
+        printf("Found a number in the range 10010-10020: %f\n", result);
+        JSValue s = JS_ToString(dctx.dc->jc, val);
+        walk_func(rt, JS_VALUE_GET_PTR(s), dctx);
+      }
+    }
+  } break;
+  default:
+    break;
   }
 }
 
@@ -1814,6 +1829,9 @@ void js_gcdump_process_obj(JSRuntime *rt, void *cell,
   key.size = sizeof(cell);
   key.hash = -1;
   int node_i = js_gcdump_node_from_gp(dc, cell);
+  if (node_i == 650) {
+    printf("");
+  }
   JSGCDumpNode *node = kid_array_el(&dc->nodes, JSGCDumpNode, node_i);
 
   int tag = JS_TAG_FIRST;
@@ -1825,6 +1843,10 @@ void js_gcdump_process_obj(JSRuntime *rt, void *cell,
     node->type = JSGCDumpNode_TYPE_STRING;
     node->name = js_gcdump_add_str(dc, (JSString *)cell);
     node->self_size = ((JSString *)cell)->len;
+  } else if(tag == JS_TAG_INT) {
+    node->type = JSGCDumpNode_TYPE_STRING;
+    node->name = js_gcdump_add_str(dc, (JSString *)cell);
+    node->self_size = sizeof (double);
   } else {
     JSGCObjectHeader *gp = cell;
 
