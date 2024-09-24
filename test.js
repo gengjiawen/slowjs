@@ -4,6 +4,8 @@ class AAAAAAAAAAAwange {
   constructor() {
     this.message = "hello";
     this.b = 10086;
+    this.c = 10087;
+    this.d = 3.7;
   }
 }
 const target = new AAAAAAAAAAAwange();

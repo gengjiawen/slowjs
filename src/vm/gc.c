@@ -1541,17 +1541,7 @@ void JS_GCDumpValue(JSRuntime *rt, JSValueConst val, JS_GCDumpFunc *walk_func,
     }
   } break;
   case JS_TAG_INT: {
-    double result = 0;
-    int ret = JS_ToFloat64(dctx.dc->jc, &result, val);
-    if (ret != 0) {
-      // Handle error
-    } else {
-      if (result > 10000 && result < 10100) {
-        printf("Found a number in the range 10010-10020: %f\n", result);
-        JSValue s = JS_ToString(dctx.dc->jc, val);
-        walk_func(rt, JS_VALUE_GET_PTR(s), dctx);
-      }
-    }
+    walk_func(rt, &val, dctx);
   } break;
   default:
     break;
@@ -1829,24 +1819,46 @@ void js_gcdump_process_obj(JSRuntime *rt, void *cell,
   key.size = sizeof(cell);
   key.hash = -1;
   int node_i = js_gcdump_node_from_gp(dc, cell);
-  if (node_i == 650) {
-    printf("");
-  }
   JSGCDumpNode *node = kid_array_el(&dc->nodes, JSGCDumpNode, node_i);
 
   int tag = JS_TAG_FIRST;
+  bool is_int = false;
   if (dctx.pr) {
-    tag = JS_VALUE_GET_TAG(dctx.pr->u.value);
+    uint32_t pt = dctx.prs->flags & JS_PROP_TMASK;
+    if (unlikely(pt == JS_PROP_GETSET || pt == JS_PROP_AUTOINIT)) {
+      // flows down to gc-object
+    } else {
+      tag = JS_VALUE_GET_TAG(dctx.pr->u.value);
+      is_int = true;
+    }
   }
 
   if (tag == JS_TAG_STRING) {
     node->type = JSGCDumpNode_TYPE_STRING;
     node->name = js_gcdump_add_str(dc, (JSString *)cell);
     node->self_size = ((JSString *)cell)->len;
-  } else if(tag == JS_TAG_INT) {
+  } else if(tag == JS_TAG_INT && is_int) {
     node->type = JSGCDumpNode_TYPE_STRING;
-    node->name = js_gcdump_add_str(dc, (JSString *)cell);
-    node->self_size = sizeof (double);
+    double c = 0;
+    int ret = JS_ToFloat64(dctx.dc->jc, &c, *(JSValue *)cell);
+    if (ret != 0) {
+      // Handle error
+    } else {
+      char buf[32];
+      if (c == floor(c)) {
+        int c_int = (int)c;
+        snprintf(buf, sizeof(buf), "%d", c_int); // Format as integer
+      } else {
+        snprintf(buf, sizeof(buf), "%f", c); // Format as double
+      }
+
+      if (c > 10000 && c < 10100) {
+        printf("c: %f, node_i: %d\n", c, node_i);
+      }
+
+      node->name = js_gcdump_add_cstr(dc, buf, strlen(buf));
+      node->self_size = sizeof (double);
+    }
   } else {
     JSGCObjectHeader *gp = cell;
 
